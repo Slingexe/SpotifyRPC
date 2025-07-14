@@ -12,13 +12,14 @@ SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
 DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
-DISCORD_ASSET_NAME = os.getenv("DISCORD_ASSET_NAME", "spotify")
-TIMEOUT = int(os.getenv("TIMEOUT", 3))
-DEBUG = os.getenv("DEBUG", "false").lower() in ("1", "true", "yes")
+DISCORD_ASSET_NAME = os.getenv("DISCORD_ASSET_NAME")
+USE_SPOTIFY_ASSET = os.getenv("USE_SPOTIFY_ASSET")
+TIMEOUT = int(os.getenv("TIMEOUT"))
+DEBUG = os.getenv("DEBUG", False)
 
 # Logger function
 def log(*args, **kwargs):
-    if DEBUG:
+    if DEBUG == "True":
         print("[DEBUG]", *args, **kwargs)
 
 # Setup Spotify API client
@@ -44,6 +45,7 @@ def update_presence():
 
     try:
         playback = sp.current_playback()
+        # log("Fetched playback:", playback)
         log("Fetched playback (filtered):", {
             "is_playing": playback.get("is_playing"),
             "progress_ms": playback.get("progress_ms"),
@@ -77,6 +79,13 @@ def update_presence():
             artist = ', '.join(artist["name"] for artist in track["artists"])
             duration = track["duration_ms"] // 1000
             progress = playback["progress_ms"] // 1000
+            album_art_url = track["album"]["images"][0]["url"]
+
+            if USE_SPOTIFY_ASSET == "True":
+                art = album_art_url
+            else:
+                art = DISCORD_ASSET_NAME
+
 
             # Update presence only if something changed
             if track_uri != last_track_uri or not last_is_playing:
@@ -84,7 +93,7 @@ def update_presence():
                 rpc.update(
                     details=title,
                     state=f"by {artist}",
-                    large_image=DISCORD_ASSET_NAME,
+                    large_image=art,
                     start=time.time() - progress,
                     end=time.time() + (duration - progress)
                 )
@@ -113,7 +122,7 @@ def update_presence():
                 rpc.update(
                     details="Paused",
                     state=f"{title} by {artist}",
-                    large_image=DISCORD_ASSET_NAME
+                    large_image=art
                 )
 
                 last_is_playing = False
