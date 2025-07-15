@@ -47,17 +47,25 @@ class DiscordRPC:
 
         self.thread = threading.Thread(target=lambda: asyncio.run(self._run(activity)), daemon=True)
         self.thread.start()
-        print("[RPC] Started")
+        if self.loop is None:
+            print("[RPC] RPC Failed to start, ensure Discord is running and the client ID is correct.")
+        else:
+            print("[RPC] Started")
 
     def update(self, activity: dict):
-        if not self.ws or not self.loop:
-            print("[RPC] Not connected, cannot update.")
+        if not self.loop:
+            print("[RPC] Not connected, attempting to start...")
+            self.start(activity)  # retry the connection with new activity
             return
-        
-        asyncio.run_coroutine_threadsafe(
-            self._send_activity(activity), 
-            self.loop
-        )
+
+        try:
+            asyncio.run_coroutine_threadsafe(
+                self._send_activity(activity),
+                self.loop
+            )
+        except Exception as e:
+            print(f"[RPC] Failed to schedule update: {e}")
+
 
     def stop(self):
         self.keep_running = False

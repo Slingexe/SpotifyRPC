@@ -51,7 +51,7 @@ sp = Spotify(auth_manager=SpotifyOAuth(
 
 # Setup Discord Rich Presence client
 rpc = DiscordRPC(DISCORD_CLIENT_ID)
-rpc.start({})  # empty to initialize
+rpc.start({})
 
 # Store the last known track ID and play state
 last_track_uri = None
