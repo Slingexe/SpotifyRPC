@@ -19,6 +19,7 @@ SONG_STATUS_ICON_PLAY = os.getenv("SONG_STATUS_ICON_PLAY")
 SONG_STATUS_ICON_PAUSE = os.getenv("SONG_STATUS_ICON_PAUSE")
 
 DEBUG = os.getenv("DEBUG", False)
+PRINT_SECRETS = os.getenv("PRINT_SECRETS", False)
 
 
 
@@ -29,10 +30,10 @@ def log(*args, **kwargs):
 
 def log_env_vars():
     log("✅ Environment variables   loaded:")
-    log(f"  SPOTIFY_CLIENT_ID:       {SPOTIFY_CLIENT_ID}")
-    log(f"  SPOTIFY_CLIENT_SECRET:   {SPOTIFY_CLIENT_SECRET}")
+    log(f"  SPOTIFY_CLIENT_ID:       {SPOTIFY_CLIENT_ID if PRINT_SECRETS == True else '***'}")
+    log(f"  SPOTIFY_CLIENT_SECRET:   {SPOTIFY_CLIENT_SECRET if PRINT_SECRETS == True else '***'}")
     log(f"  SPOTIFY_REDIRECT_URI:    {SPOTIFY_REDIRECT_URI}")
-    log(f"  DISCORD_CLIENT_ID:       {DISCORD_CLIENT_ID}")
+    log(f"  DISCORD_CLIENT_ID:       {DISCORD_CLIENT_ID if PRINT_SECRETS == True else '***'}")
     log(f"  DISCORD_ASSET_NAME:      {DISCORD_ASSET_NAME}")
     log(f"  USE_SPOTIFY_ASSET:       {USE_SPOTIFY_ASSET}")
     log(f"  TIMEOUT:                 {TIMEOUT}")
@@ -136,7 +137,7 @@ def update_presence():
         if SONG_STATUS_ICON:
             activity["name"] = title
             activity["assets"]["small_image"] = "pause"
-            activity["assets"]["small_text"] = "Playing"
+            activity["assets"]["small_text"] = "Paused"
 
         log("Updating RPC (paused):", last_metadata["title"])
         rpc.update(activity)

@@ -13,4 +13,11 @@ Install requirements.txt
 Run the python script  
 `python main.py`  
   
-Look at your discord activity :D  
+Look at your discord activity :D
+
+Examples  
+Playing  
+![Playing](https://github.com/Slingexe/SpotifyRPC/blob/main/.github/readme-screenshots/playing.png)
+
+Paused  
+![Paused](https://github.com/Slingexe/SpotifyRPC/blob/main/.github/readme-screenshots/paused.png)
