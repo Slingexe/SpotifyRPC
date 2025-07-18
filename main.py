@@ -3,7 +3,7 @@ import time
 from spotipy import Spotify
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
-from discord_rpc import DiscordRPC
+from RPC import DiscordRPC
 
 load_dotenv()
 # Load environment variables from .env
