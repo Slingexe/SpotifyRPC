@@ -93,7 +93,7 @@ def update_presence():
             "name": title,
             "type": 0,
             "details": f"by {artist}",
-            "state": "RPC created by @Slingexe",
+            "state": f"Listening to {album_name}",
             "timestamps": {
                 "start": int(time.time()) - progress,
                 "end": int(time.time()) + (duration - progress)
@@ -101,7 +101,13 @@ def update_presence():
             "assets": {
                 "large_image": album_image_url,
                 "large_text": album_name
-            }
+            },
+            "buttons": [
+                {
+                    "label": "GitHub",
+                    "url": "https://github.com/Slingexe/SpotifyRPC"
+                }
+            ]
         }
 
         if SONG_STATUS_ICON:
@@ -128,11 +134,17 @@ def update_presence():
             "name": "{title} - Paused",
             "type": 0,
             "details": f"by {artist}",
-            "state": "RPC created by @Slingexe",
+            "state": f"Listening to {album_name}",
             "assets": {
                 "large_image": album_image_url,
                 "large_text": album_name
-            }
+            },
+            "buttons": [
+                {
+                    "label": "GitHub",
+                    "url": "https://github.com/Slingexe/SpotifyRPC"
+                }
+            ]
         }
         if SONG_STATUS_ICON:
             activity["name"] = title
