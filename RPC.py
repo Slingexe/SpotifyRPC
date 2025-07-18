@@ -79,9 +79,25 @@ class DiscordRPC:
     def update(self, activity):
         self.activity = activity
         try:
+            # Check if socket is valid by sending empty payload
             self._set_activity()
         except Exception as e:
-            print(f"[RPC] Update failed: {e}")
+            print(f"[RPC] Update failed, attempting reconnect: {e}")
+            try:
+                if self.sock:
+                    self.sock.close()
+            except:
+                pass
+            
+            # Try full reconnect
+            try:
+                self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                self.sock.connect(self._get_ipc_path())
+                self._handshake()
+                self._set_activity()
+            except Exception as ex:
+                print(f"[RPC] Reconnect failed: {ex}")
+
 
     def stop(self):
         self.running = False

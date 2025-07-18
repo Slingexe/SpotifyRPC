@@ -84,6 +84,35 @@ def update_presence():
     album_name = track["album"]["name"]
     album_image_url = track["album"]["images"][0]["url"] if USE_SPOTIFY_ASSET else "spotify"
 
+    play_name = None
+    context = playback.get("context")
+
+    if context:
+        context_type = context.get("type")
+        context_uri = context.get("uri")
+        log("Context found:", context_type, context_uri)
+
+        if context_type == "playlist":
+            playlist_id = context_uri.split(":")[-1]
+            try:
+                playlist = sp.playlist(playlist_id)
+                play_name = "playlist '" + playlist['name'] + "'"
+            except Exception as e:
+                log("Could not fetch playlist name:", e)
+        elif context_type == "album":
+            album_id = context_uri.split(":")[-1]
+            try:
+                album = sp.album(album_id)
+                play_name = "album '" + album['name'] + "'"
+            except Exception as e:
+                log("Could not fetch album name:", e)
+        elif context_uri and ":collection" in context_uri:
+            play_name = "Liked Songs"
+
+
+
+
+
     log(f"Current track: {title} by {artist} ({'playing' if is_playing else 'paused'})")
     log(f"Fetched data: duration={duration}s, progress={progress}s, album={album_name}, image={album_image_url}")
 
@@ -93,7 +122,7 @@ def update_presence():
             "name": title,
             "type": 0,
             "details": f"by {artist}",
-            "state": f"Listening to {album_name}",
+            "state": f"Listening to {play_name} on Spotify" if play_name else "Listening to Spotify",
             "timestamps": {
                 "start": int(time.time()) - progress,
                 "end": int(time.time()) + (duration - progress)
@@ -134,7 +163,7 @@ def update_presence():
             "name": "{title} - Paused",
             "type": 0,
             "details": f"by {artist}",
-            "state": f"Listening to {album_name}",
+            "state": f"Listening to {play_name} on Spotify" if play_name else "Listening to Spotify",
             "assets": {
                 "large_image": album_image_url,
                 "large_text": album_name
