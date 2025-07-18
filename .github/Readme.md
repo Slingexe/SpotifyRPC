@@ -15,7 +15,7 @@ Run the python script
   
 Look at your discord activity :D
 
-## Examples  
+## The RPC in action
 ![Playing from liked songs](https://github.com/Slingexe/SpotifyRPC/blob/main/.github/readme-screenshots/playing1.png)
 ![Paused from liked songs](https://github.com/Slingexe/SpotifyRPC/blob/main/.github/readme-screenshots/paused1.png)
 ![Playing from album](https://github.com/Slingexe/SpotifyRPC/blob/main/.github/readme-screenshots/playing-album.png)
