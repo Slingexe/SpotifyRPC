@@ -15,9 +15,8 @@ Run the python script
   
 Look at your discord activity :D
 
-Examples  
-Playing  
-![Playing](https://github.com/Slingexe/SpotifyRPC/blob/main/.github/readme-screenshots/playing.png)
-
-Paused  
-![Paused](https://github.com/Slingexe/SpotifyRPC/blob/main/.github/readme-screenshots/paused.png)
+## Examples  
+![Playing from liked songs](https://github.com/Slingexe/SpotifyRPC/blob/main/.github/readme-screenshots/playing.png)
+![Paused from liked songs](https://github.com/Slingexe/SpotifyRPC/blob/main/.github/readme-screenshots/paused.png)
+![Playing from album](https://github.com/Slingexe/SpotifyRPC/blob/main/.github/readme-screenshots/playing-album.png)
+![Playing from playlist](https://github.com/Slingexe/SpotifyRPC/blob/main/.github/readme-screenshots/playing-playlist.png)
