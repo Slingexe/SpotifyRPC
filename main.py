@@ -1,7 +1,9 @@
 import os
 import time
+import requests
 from spotipy import Spotify
 from spotipy.oauth2 import SpotifyOAuth
+from spotipy.exceptions import SpotifyException
 from dotenv import load_dotenv
 from RPC import DiscordRPC
 
@@ -42,13 +44,27 @@ def log_env_vars():
     log(f"  SONG_STATUS_ICON_PAUSE:  {SONG_STATUS_ICON_PAUSE}")
     log(f"  DEBUG:                   {DEBUG}")
 
+def wait_for_spotify_auth():
+    while True:
+        try:
+            auth = SpotifyOAuth(
+                client_id=SPOTIFY_CLIENT_ID,
+                client_secret=SPOTIFY_CLIENT_SECRET,
+                redirect_uri=SPOTIFY_REDIRECT_URI,
+                scope="user-read-playback-state"
+            )
+            sp = Spotify(auth_manager=auth)
+            # test the connection
+            sp.current_playback()
+            print("✅ Spotify authenticated and reachable.")
+            return sp
+        except (SpotifyException, requests.exceptions.RequestException) as e:
+            print("⛔ Spotify not reachable — waiting for internet...")
+            log("Failed to connect to spotify:", e)
+            time.sleep(5)
+
 # Setup Spotify API client
-sp = Spotify(auth_manager=SpotifyOAuth(
-    client_id=SPOTIFY_CLIENT_ID,
-    client_secret=SPOTIFY_CLIENT_SECRET,
-    redirect_uri=SPOTIFY_REDIRECT_URI,
-    scope="user-read-playback-state"
-))
+sp = wait_for_spotify_auth()
 
 # Setup Discord Rich Presence client
 rpc = DiscordRPC(DISCORD_CLIENT_ID)
@@ -60,9 +76,16 @@ last_is_playing = None
 last_metadata = {}
 
 def update_presence():
-    global last_track_uri, last_is_playing, last_metadata
+    global last_track_uri, last_is_playing, last_metadata, sp
 
-    playback = sp.current_playback()
+    try:
+        playback = sp.current_playback()
+    except (SpotifyException, requests.exceptions.RequestException) as e:
+        log("🔁 Re-authenticating Spotify due to network error...")
+        sp = wait_for_spotify_auth()
+        return
+
+        
     log("Fetched playback.")
 
     if not playback or playback.get("item") is None or playback.get("progress_ms") is None:
