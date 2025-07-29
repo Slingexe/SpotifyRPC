@@ -89,10 +89,32 @@ last_is_playing = None
 last_metadata = {}
 
 server_data = TrackInfo(
+    is_offline=True, is_playing=False,
     title="", artist="", uri="", artURL="",
-    duration_ms=0, progress_ms=0,
+    duration=0, progress=0,
     context_type="", context_uri="", context_name=""
 )
+
+def clear_server_data():
+    """Reset server data to offline state."""
+    global server_data
+    server_data.is_offline = True
+    server_data.is_playing = False
+    server_data.title = ""
+    server_data.artist = ""
+    server_data.uri = ""
+    server_data.artURL = ""
+    server_data.duration = 0
+    server_data.progress = 0
+    server_data.context_type = ""
+    server_data.context_uri = ""
+    server_data.context_name = ""
+    if ENABLE_SERVER and server:
+        try:
+            server.update(TrackInfo=server_data)
+            log("Updated Now Playing server to offline state.")
+        except Exception as e:
+            log("Failed to update Now Playing server:", e)
 
 # ==== Presence Update Logic ====
 def update_presence():
@@ -105,6 +127,7 @@ def update_presence():
     except (SpotifyException, requests.exceptions.RequestException):
         log("🔁 Re-authenticating Spotify due to network error...")
         sp = wait_for_spotify_auth()
+        clear_server_data()
         return
 
     # -- Nothing Playing --
@@ -115,6 +138,7 @@ def update_presence():
             last_track_uri = None
             last_is_playing = None
             last_metadata = {}
+            clear_server_data()
         return
 
     # -- Gather Track Info --
@@ -157,12 +181,14 @@ def update_presence():
 
     # -- Update Server Data --
     if ENABLE_SERVER and server:
+        server_data.is_offline   = False
+        server_data.is_playing   = is_playing
         server_data.title        = title
         server_data.artist       = artist
         server_data.uri          = track_uri
         server_data.artURL       = album_img
-        server_data.duration_ms  = duration * 1000
-        server_data.progress_ms  = progress * 1000
+        server_data.duration     = duration
+        server_data.progress     = progress
         server_data.context_type = context_type
         server_data.context_uri  = context_uri
         server_data.context_name = context_name

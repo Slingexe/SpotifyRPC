@@ -27,14 +27,33 @@ When you enable the server, the track data that the application collects will be
 Example Data from server  
 ```
 {
+  "is_offline": false,
+  "is_playing": true,
   "title": "blue",
   "artist": "yung kai",
   "uri": "spotify:track:3be9ACTxtcL6Zm4vJRUiPG",
   "artURL": "https://i.scdn.co/image/ab67616d0000b273373c63a4666fb7193febc167",
-  "duration_ms": 214000.0,
-  "progress_ms": 200000.0,
+  "duration": 214.0,
+  "progress": 191.0,
   "context_type": "user_collection",
   "context_uri": "spotify:user:kvk5kbs1fav3zndeztxlaeubr:collection",
   "context_name": "Liked Songs"
+}
+```
+  
+When spotify is closed / offline  
+```
+{
+  "is_offline": true,
+  "is_playing": false,
+  "title": "",
+  "artist": "",
+  "uri": "",
+  "artURL": "",
+  "duration": 0.0,
+  "progress": 0.0,
+  "context_type": "",
+  "context_uri": "",
+  "context_name": ""
 }
 ```

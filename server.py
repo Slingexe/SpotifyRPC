@@ -5,15 +5,17 @@ import threading
 import uvicorn
 
 class TrackInfo(BaseModel):
-    title: str = None
-    artist: str = None
-    uri: str = None
-    artURL: str = None
-    duration_ms: float = 0
-    progress_ms: float = 0
-    context_type: str = None
-    context_uri: str = None
-    context_name: str = None
+    is_offline: bool = True
+    is_playing: bool = False
+    title: str = ""
+    artist: str = ""
+    uri: str = ""
+    artURL: str = ""
+    duration: float = 0
+    progress: float = 0
+    context_type: str = ""
+    context_uri: str = ""
+    context_name: str = ""
 
 class NowPlayingServer:
     def __init__(self, host: str = "0.0.0.0", port: int = 62011):
