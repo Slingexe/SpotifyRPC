@@ -6,6 +6,7 @@ from spotipy.oauth2 import SpotifyOAuth
 from spotipy.exceptions import SpotifyException
 from dotenv import load_dotenv
 from RPC import DiscordRPC
+from server import NowPlayingServer, TrackInfo
 
 load_dotenv()
 # Load environment variables from .env
@@ -19,30 +20,40 @@ TIMEOUT = int(os.getenv("TIMEOUT"))
 SONG_STATUS_ICON = os.getenv("SONG_STATUS_ICON", "false").lower() in ("1", "true", "yes")
 SONG_STATUS_ICON_PLAY = os.getenv("SONG_STATUS_ICON_PLAY")
 SONG_STATUS_ICON_PAUSE = os.getenv("SONG_STATUS_ICON_PAUSE")
+ENABLE_SERVER = os.getenv("ENABLE_SERVER", "false").lower() in ("1", "true", "yes")
+ENABLE_LISTEN_ALONG_BUTTON = os.getenv("ENABLE_LISTEN_ALONG_BUTTON", "false").lower() in ("1", "true", "yes")
+LISTEN_ALONG_URL = os.getenv("LISTEN_ALONG_URL")
 
-DEBUG = os.getenv("DEBUG", False)
-PRINT_SECRETS = os.getenv("PRINT_SECRETS", False)
+DEBUG = os.getenv("DEBUG", "false").lower() in ("1", "true", "yes")
+PRINT_SECRETS = os.getenv("PRINT_SECRETS", "false").lower() in ("1", "true", "yes")
 
+LISTEN_ALONG_BUTTON = {
+    "label": "Listen Along",
+    "url": LISTEN_ALONG_URL
+}
 
 
 # Logger function
 def log(*args, **kwargs):
-    if DEBUG == "True":
+    if DEBUG:
         print("[DEBUG]", *args, **kwargs)
 
 def log_env_vars():
     log("✅ Environment variables   loaded:")
-    log(f"  SPOTIFY_CLIENT_ID:       {SPOTIFY_CLIENT_ID if PRINT_SECRETS == True else '***'}")
-    log(f"  SPOTIFY_CLIENT_SECRET:   {SPOTIFY_CLIENT_SECRET if PRINT_SECRETS == True else '***'}")
-    log(f"  SPOTIFY_REDIRECT_URI:    {SPOTIFY_REDIRECT_URI}")
-    log(f"  DISCORD_CLIENT_ID:       {DISCORD_CLIENT_ID if PRINT_SECRETS == True else '***'}")
-    log(f"  DISCORD_ASSET_NAME:      {DISCORD_ASSET_NAME}")
-    log(f"  USE_SPOTIFY_ASSET:       {USE_SPOTIFY_ASSET}")
-    log(f"  TIMEOUT:                 {TIMEOUT}")
-    log(f"  SONG_STATUS_ICON:        {SONG_STATUS_ICON}")
-    log(f"  SONG_STATUS_ICON_PLAY:   {SONG_STATUS_ICON_PLAY}")
-    log(f"  SONG_STATUS_ICON_PAUSE:  {SONG_STATUS_ICON_PAUSE}")
-    log(f"  DEBUG:                   {DEBUG}")
+    log(f"  SPOTIFY_CLIENT_ID:          {SPOTIFY_CLIENT_ID if PRINT_SECRETS else '***'}")
+    log(f"  SPOTIFY_CLIENT_SECRET:      {SPOTIFY_CLIENT_SECRET if PRINT_SECRETS else '***'}")
+    log(f"  SPOTIFY_REDIRECT_URI:       {SPOTIFY_REDIRECT_URI if PRINT_SECRETS else '***'}")
+    log(f"  DISCORD_CLIENT_ID:          {DISCORD_CLIENT_ID if PRINT_SECRETS else '***'}")
+    log(f"  DISCORD_ASSET_NAME:         {DISCORD_ASSET_NAME}")
+    log(f"  USE_SPOTIFY_ASSET:          {USE_SPOTIFY_ASSET}")
+    log(f"  TIMEOUT:                    {TIMEOUT}")
+    log(f"  SONG_STATUS_ICON:           {SONG_STATUS_ICON}")
+    log(f"  SONG_STATUS_ICON_PLAY:      {SONG_STATUS_ICON_PLAY}")
+    log(f"  SONG_STATUS_ICON_PAUSE:     {SONG_STATUS_ICON_PAUSE}")
+    log(f"  ENABLE_SERVER:              {ENABLE_SERVER}")
+    log(f"  ENABLE_LISTEN_ALONG_BUTTON: {ENABLE_LISTEN_ALONG_BUTTON}")
+    log(f"  LISTEN_ALONG_URL:           {LISTEN_ALONG_URL if ENABLE_LISTEN_ALONG_BUTTON else 'N/A' if PRINT_SECRETS else '***'}")
+    log(f"  DEBUG:                      {DEBUG}")
 
 def wait_for_spotify_auth():
     while True:
@@ -70,6 +81,11 @@ sp = wait_for_spotify_auth()
 rpc = DiscordRPC(DISCORD_CLIENT_ID)
 rpc.start({})
 
+
+if ENABLE_SERVER:
+    # Start the Now Playing server
+    server = NowPlayingServer()
+    server.start()
 # Store the last known track ID and play state
 last_track_uri = None
 last_is_playing = None
@@ -132,12 +148,25 @@ def update_presence():
         elif context_uri and ":collection" in context_uri:
             play_name = "Liked Songs"
 
-
-
-
-
     log(f"Current track: {title} by {artist} ({'playing' if is_playing else 'paused'})")
     log(f"Fetched data: duration={duration}s, progress={progress}s, album={album_name}, image={album_image_url}")
+
+    if ENABLE_SERVER:
+        # Update the server with the current track info
+        try:
+            server.update(
+                TrackInfo=TrackInfo(
+                    title=title,
+                    artist=artist,
+                    uri=track_uri,
+                    artURL=album_image_url,
+                    duration_ms=duration / 1000,  # Convert to ms
+                    progress_ms=progress / 1000  # Convert to ms
+                )
+            )
+            log("Updated Now Playing server with current track info.")
+        except Exception as e:
+            log("Failed to update Now Playing server:", e)
 
     # Always refresh metadata when playing
     if is_playing:
@@ -165,6 +194,9 @@ def update_presence():
         if SONG_STATUS_ICON:
             activity["assets"]["small_image"] = "play"
             activity["assets"]["small_text"] = "Playing"
+
+        if ENABLE_LISTEN_ALONG_BUTTON:
+            activity["buttons"].insert(0, LISTEN_ALONG_BUTTON)
 
         log("Updating RPC (playing):", title)
         rpc.update(activity)
@@ -202,6 +234,9 @@ def update_presence():
             activity["name"] = title
             activity["assets"]["small_image"] = "pause"
             activity["assets"]["small_text"] = "Paused"
+
+        if ENABLE_LISTEN_ALONG_BUTTON:
+            activity["buttons"].insert(0, LISTEN_ALONG_BUTTON)
 
         log("Updating RPC (paused):", last_metadata["title"])
         rpc.update(activity)
