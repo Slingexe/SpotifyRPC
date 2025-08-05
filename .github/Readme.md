@@ -21,7 +21,7 @@ Look at your discord activity :D
 ![Playing from album](https://github.com/Slingexe/SpotifyRPC/blob/main/.github/readme-screenshots/playing-album.png)
 ![Playing from playlist](https://github.com/Slingexe/SpotifyRPC/blob/main/.github/readme-screenshots/playing-playlist.png)
 
-## Server
+## Server (Note: You will have to pull main for this feature atm)
 When you enable the server, the track data that the application collects will be available at http://localhost:62011/  
   
 Example Data from server  
