@@ -1,0 +1,3 @@
+[submodule "SpotifyRPC-Extra"]
+	path = SpotifyRPC-Extra
+	url = https://github.com/Slingexe/SpotifyRPC-Extra/
