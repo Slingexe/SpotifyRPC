@@ -57,3 +57,13 @@ When spotify is closed / offline
   "context_name": ""
 }
 ```
+
+# SpotifyRPC-Extra
+To download the Extra's repository run the following commands via git  
+```
+git submodules init
+git submodules update
+```  
+This will populate the [SpotifyRPC-Extra](https://github.com/Slingexe/SpotifyRPC-Extra) folder  
+  
+If you don't want to use git, you can just delete the directory and unzip the repository, it does the same thing.  
