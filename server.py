@@ -7,6 +7,8 @@ import uvicorn
 class TrackInfo(BaseModel):
     is_offline: bool = True
     is_playing: bool = False
+    ratelimit: bool = False
+    rl_time: int = 0
     title: str = ""
     artist: str = ""
     uri: str = ""
