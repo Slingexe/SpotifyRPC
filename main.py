@@ -76,6 +76,7 @@ def spotify_api_call(func, *args, **kwargs):
                         log("Failed to update Now Playing server:", ex)
                 ratelimit_presence()
                 time.sleep(retry_after)
+                clear_server_data()
             else:
                 raise
 

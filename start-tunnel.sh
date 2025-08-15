@@ -9,4 +9,8 @@ cd SpotifyRPC-Extra/
 echo "--------------------------" >> ./../logs/tunnel.log
 echo "Script started at $(date)" >> ./../logs/tunnel.log
 echo "--------------------------" >> ./../logs/tunnel.log
-npm run tunnel >> ./../logs/tunnel.log 2>&1
+# I used this line to run this locally
+# npm run tunnel >> ./../logs/tunnel.log 2>&1
+
+# I run the extras site on vercel and now need to tunnel the python server
+cloudflared tunnel run spotify-api
