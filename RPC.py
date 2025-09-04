@@ -17,8 +17,19 @@ class DiscordRPC:
     def _get_ipc_path(self):
         if sys.platform == "win32":
             return r"\\?\pipe\discord-ipc-0"
-        else:
-            return os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "discord-ipc-0")
+        uid = os.getuid()
+        xdg = os.environ.get("XDG_RUNTIME_DIR")
+        candidates = []
+        if xdg:
+            candidates += [os.path.join(xdg, f"discord-ipc-{i}") for i in range(3)]
+        candidates += [
+            f"/run/user/{uid}/discord-ipc-{i}" for i in range(3)
+        ] + [f"/run/user/{uid}/app/com.discordapp.Discord/discord-ipc-0"]
+        for p in candidates:
+            if os.path.exists(p):
+                return p
+        return os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "discord-ipc-0")
+
 
     def _send_data(self, op, payload):
         data = json.dumps(payload).encode("utf-8")
@@ -49,6 +60,15 @@ class DiscordRPC:
             "nonce": str(time.time())
         }
         self._send_data(1, payload)
+        self.sock.settimeout(1.0)
+        try:
+            op, resp = self._read_data()
+            if resp.get("evt") == "ERROR" or resp.get("code"):
+                print("[RPC] Rejected SET_ACTIVITY:", resp)
+        except socket.timeout:
+            pass
+        finally:
+            self.sock.settimeout(None)
 
     def _ipc_loop(self):
         while self.running:

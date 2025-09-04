@@ -90,6 +90,24 @@ class PresenceUpdater:
 
         self._http = requests.Session()
 
+        # Debounce fields
+        self._consecutive_misses = 0
+        self._last_playback_ts = 0
+        self._max_misses = 3
+        self._stale_seconds = 45
+
+        # optional retry adapter
+        try:
+            from urllib3.util.retry import Retry
+            from requests.adapters import HTTPAdapter
+            retry = Retry(total=2, connect=2, read=2, backoff_factor=0.2,
+                          status_forcelist=(502, 503, 504), raise_on_status=False)
+            adapter = HTTPAdapter(max_retries=retry)
+            self._http.mount("http://", adapter)
+            self._http.mount("https://", adapter)
+        except Exception:
+            pass
+
     # ---------- Logging ----------
 
     def log(self, *args: t.Any, **kwargs: t.Any) -> None:
@@ -119,7 +137,6 @@ class PresenceUpdater:
     # ---------- Spotify ----------
 
     def _wait_for_spotify_auth(self) -> Spotify:
-        """Loop until we can authenticate + make a basic call (covers network flaps)."""
         while True:
             try:
                 auth = SpotifyOAuth(
@@ -129,7 +146,6 @@ class PresenceUpdater:
                     scope="user-read-playback-state",
                 )
                 sp = Spotify(auth_manager=auth, retries=0)
-                # simple ping to ensure token/network is good
                 self._spotify_api_call(sp.current_playback)
                 print("✅ Spotify authenticated and reachable.")
                 return sp
@@ -139,7 +155,6 @@ class PresenceUpdater:
                 time.sleep(5)
 
     def _spotify_api_call(self, func: t.Callable, *args: t.Any, **kwargs: t.Any) -> t.Any:
-        """Run a Spotify API call and handle 429 globally, returning the result."""
         while True:
             try:
                 return func(*args, **kwargs)
@@ -147,45 +162,43 @@ class PresenceUpdater:
                 if e.http_status == 429:
                     retry_after = int(e.headers.get("Retry-After", 30))
                     self.log(f"⚠️ Spotify rate limit — sleeping {retry_after}s")
-                    # show rate-limit presence without touching RPC elsewhere
                     self._ratelimit_presence(retry_after)
                     time.sleep(retry_after)
-                    # clear presence once we resume trying
                     self.rpc.stop()
                 else:
                     raise
 
+    # ---------- RPC helper ----------
+
+    def _rpc_update_safe(self, activity: dict[str, t.Any]) -> None:
+        try:
+            self.rpc.update(activity)
+        except Exception as e:
+            self.log("[RPC] Update failed, attempting reconnect:", e)
+            try:
+                self.rpc.stop()
+            except Exception:
+                pass
+            try:
+                self.rpc = DiscordRPC(self.cfg.discord_client_id)
+                self.rpc.start({})
+                self.rpc.update(activity)
+            except Exception as e2:
+                self.log("[RPC] Reconnect+retry failed:", e2)
+
     # ---------- Fetch Playback ----------
 
     def _fetch_playback(self) -> dict[str, t.Any] | None:
-        """
-        Returns a normalized playback dict or None if nothing playable.
-        Normalized shape:
-        {
-          "is_playing": bool,
-          "uri": str,
-          "title": str,
-          "artist": str,
-          "duration": int (sec),
-          "progress": int (sec),
-          "album_name": str,
-          "album_img": str | "spotify",
-          "context_type": str,
-          "context_uri": str,
-          "context_name": str,
-          "play_name": str | None
-        }
-        """
         if self.cfg.server_fetch:
             try:
-                resp = self._http.get(self.cfg.server_url, timeout=5)
+                resp = self._http.get(self.cfg.server_url, timeout=3,
+                                      headers={"Connection": "close"})
                 resp.raise_for_status()
                 data = resp.json()
             except Exception as e:
                 self.log("Could not fetch from server:", e)
                 return None
 
-            # Server contract
             if data is None or data.get("is_offline") is True:
                 return None
 
@@ -204,13 +217,8 @@ class PresenceUpdater:
                 "play_name": data.get("context_name", ""),
             }
 
-        # Spotify API branch
         sp_playback = self._spotify_api_call(self.sp.current_playback)
-        if not sp_playback:
-            return None
-        if not sp_playback.get("is_playing"):
-            return None
-        if sp_playback.get("progress_ms") is None:
+        if not sp_playback or not sp_playback.get("is_playing") or sp_playback.get("progress_ms") is None:
             return None
 
         item = sp_playback.get("item")
@@ -222,10 +230,8 @@ class PresenceUpdater:
         duration = (item.get("duration_ms") or 0) // 1000
         progress = (sp_playback.get("progress_ms") or 0) // 1000
         album_name = (item.get("album", {}) or {}).get("name", "")
-        album_img = (
-            ((item.get("album", {}) or {}).get("images") or [{}])[0].get("url")
-            if self.cfg.use_spotify_asset else "spotify"
-        )
+        album_img = (((item.get("album", {}) or {}).get("images") or [{}])[0].get("url")
+                     if self.cfg.use_spotify_asset else "spotify")
 
         context = sp_playback.get("context") or {}
         context_type = context.get("type") or ""
@@ -268,98 +274,77 @@ class PresenceUpdater:
 
     # ---------- Discord Activity ----------
 
-    def _build_activity(
-        self,
-        *,
-        title: str,
-        artist: str,
-        album_name: str,
-        album_img: str | None,
-        play_name: str | None,
-        duration: int | None,
-        progress: int | None,
-        paused: bool = False,
-    ) -> dict[str, t.Any]:
-        # timestamps only when playing (avoid drift on pauses)
+    def _build_activity(self, *, title, artist, album_name, album_img,
+                        play_name, duration, progress, paused=False) -> dict[str, t.Any]:
         now = int(time.time())
         timestamps: dict[str, int] | None = None
         if not paused and duration is not None and progress is not None:
-            timestamps = {
-                "start": now - max(progress, 0),
-                "end": now + max(duration - progress, 0),
-            }
+            timestamps = {"start": now - max(progress, 0),
+                          "end": now + max(duration - progress, 0)}
 
         small_img = None
         small_txt = None
         if self.cfg.song_status_icon:
-            small_img = (self.cfg.song_status_icon_pause if paused else self.cfg.song_status_icon_play) or ("pause" if paused else "play")
+            small_img = (self.cfg.song_status_icon_pause if paused else self.cfg.song_status_icon_play) \
+                        or ("pause" if paused else "play")
             small_txt = "Paused" if paused else "Playing"
 
-        buttons = [{
-            "label": "GitHub",
-            "url": "https://github.com/Slingexe/SpotifyRPC",
-        }]
+        buttons = [{"label": "GitHub", "url": "https://github.com/Slingexe/SpotifyRPC"}]
         if self.cfg.enable_custom_button:
-            buttons.insert(0, {"label": self.cfg.custom_button_text, "url": self.cfg.custom_button_url})
+            buttons.insert(0, {"label": self.cfg.custom_button_text,
+                               "url": self.cfg.custom_button_url})
 
-        assets = {
-            "large_image": album_img or self.cfg.discord_asset_name or "spotify",
-            "large_text": album_name or "Spotify",
-        }
-        if small_img:
-            assets["small_image"] = small_img
-        if small_txt:
-            assets["small_text"] = small_txt
+        assets = {"large_image": album_img or self.cfg.discord_asset_name or "spotify",
+                  "large_text": album_name or "Spotify"}
+        if small_img: assets["small_image"] = small_img
+        if small_txt: assets["small_text"] = small_txt
 
-        activity = {
-            "name": title if not paused else f"{title} - Paused",
-            "type": 0,
-            "details": f"by {artist}",
-            "state": f"Listening to {play_name} on Spotify" if play_name else "Listening to Spotify",
-            "assets": assets,
-            "buttons": buttons,
-        }
-        if timestamps:
-            activity["timestamps"] = timestamps
+        activity = {"name": title if not paused else f"{title} - Paused",
+                    "type": 0,
+                    "details": f"by {artist}",
+                    "state": f"Listening to {play_name} on Spotify" if play_name else "Listening to Spotify",
+                    "assets": assets,
+                    "buttons": buttons}
+        if timestamps: activity["timestamps"] = timestamps
         return activity
 
     def _ratelimit_presence(self, time_to_wait: int | None) -> None:
-        buttons = [{
-            "label": "GitHub",
-            "url": "https://github.com/Slingexe/SpotifyRPC",
-        }]
+        buttons = [{"label": "GitHub", "url": "https://github.com/Slingexe/SpotifyRPC"}]
         if self.cfg.enable_custom_button:
-            buttons.insert(0, {"label": self.cfg.custom_button_text, "url": self.cfg.custom_button_url})
-
-        activity = {
-            "name": "Rate Limited",
-            "type": 0,
-            "details": "Spotify API Rate Limit Hit",
-            "state": f"Retrying in {time_to_wait} seconds" if time_to_wait else "Retrying soon",
-            "assets": {
-                "large_image": self.cfg.discord_asset_name or "spotify",
-                "large_text": "Rate Limited",
-            },
-            "buttons": buttons,
-        }
-        self.rpc.update(activity)
+            buttons.insert(0, {"label": self.cfg.custom_button_text,
+                               "url": self.cfg.custom_button_url})
+        activity = {"name": "Rate Limited",
+                    "type": 0,
+                    "details": "Spotify API Rate Limit Hit",
+                    "state": f"Retrying in {time_to_wait} seconds" if time_to_wait else "Retrying soon",
+                    "assets": {"large_image": self.cfg.discord_asset_name or "spotify",
+                               "large_text": "Rate Limited"},
+                    "buttons": buttons}
+        self._rpc_update_safe(activity)
 
     # ---------- Public: one tick ----------
 
     def tick(self) -> None:
-        """One update cycle: fetch playback, update presence, handle errors."""
         try:
             pb = self._fetch_playback()
 
-            # nothing playable
             if not pb:
-                if self._last_track_uri:
-                    self.log("Clearing RPC presence (nothing playing).")
-                    self.rpc.stop()
-                    self._last_track_uri = None
-                    self._last_is_playing = None
-                    self._last_metadata = {}
+                self._consecutive_misses += 1
+                age = int(time.time()) - self._last_playback_ts
+                if self._consecutive_misses >= self._max_misses or age >= self._stale_seconds:
+                    if self._last_track_uri:
+                        self.log("Clearing RPC presence (stale or too many misses).")
+                        try: self.rpc.stop()
+                        except Exception: pass
+                        self._last_track_uri = None
+                        self._last_is_playing = None
+                        self._last_metadata = {}
+                else:
+                    self.log(f"Miss {self._consecutive_misses}/{self._max_misses} (age={age}s) — keeping presence.")
                 return
+
+            self._consecutive_misses = 0
+            self._last_playback_ts = int(time.time())
 
             is_playing = bool(pb["is_playing"])
             title = pb["title"]
@@ -375,26 +360,18 @@ class PresenceUpdater:
             self.log(f"Track details: duration={duration}s, progress={progress}s, album={album_name}, image={album_img}")
 
             if is_playing:
-                activity = self._build_activity(
-                    title=title,
-                    artist=artist,
-                    album_name=album_name,
-                    album_img=album_img,
-                    play_name=play_name,
-                    duration=duration,
-                    progress=progress,
-                    paused=False,
-                )
+                activity = self._build_activity(title=title, artist=artist,
+                                                album_name=album_name, album_img=album_img,
+                                                play_name=play_name, duration=duration,
+                                                progress=progress, paused=False)
                 self.log("Updating RPC (playing):", title)
-                self.rpc.update(activity)
+                self._rpc_update_safe(activity)
                 self._last_track_uri = track_uri
                 self._last_is_playing = True
-                self._last_metadata = {
-                    "title": title, "artist": artist, "duration": duration,
-                    "progress": progress, "album": album_name, "image": album_img
-                }
+                self._last_metadata = {"title": title, "artist": artist,
+                                       "duration": duration, "progress": progress,
+                                       "album": album_name, "image": album_img}
             else:
-                # only push a paused presence if we previously had playing metadata
                 if self._last_is_playing and self._last_metadata:
                     activity = self._build_activity(
                         title=self._last_metadata["title"],
@@ -402,12 +379,10 @@ class PresenceUpdater:
                         album_name=self._last_metadata["album"],
                         album_img=self._last_metadata["image"],
                         play_name=play_name,
-                        duration=None,
-                        progress=None,
-                        paused=True,
-                    )
+                        duration=None, progress=None,
+                        paused=True)
                     self.log("Updating RPC (paused):", self._last_metadata["title"])
-                    self.rpc.update(activity)
+                    self._rpc_update_safe(activity)
                     self._last_is_playing = False
 
         except SpotifyException as e:
@@ -419,21 +394,17 @@ class PresenceUpdater:
             else:
                 self.log("🔁 Spotify API error — re-authenticating:", e)
                 self.sp = self._wait_for_spotify_auth()
-
         except requests.exceptions.RequestException as e:
             self.log("🔁 Network error — re-authenticating Spotify:", e)
             self.sp = self._wait_for_spotify_auth()
-
         except Exception as e:
             self.log("❌ Unhandled error during update:", e)
 
     # ---------- Clean shutdown ----------
 
     def shutdown(self) -> None:
-        try:
-            self.rpc.stop()
-        except Exception:
-            pass
+        try: self.rpc.stop()
+        except Exception: pass
 
 
 # =========================
