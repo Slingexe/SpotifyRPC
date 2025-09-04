@@ -81,6 +81,7 @@ class DiscordRPC:
         try:
             # Check if socket is valid by sending empty payload
             self._set_activity()
+            print("[RPC] Updated activity")
         except Exception as e:
             print(f"[RPC] Update failed, attempting reconnect: {e}")
             try:
