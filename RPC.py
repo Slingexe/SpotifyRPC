@@ -22,9 +22,13 @@ class DiscordRPC:
         candidates = []
         if xdg:
             candidates += [os.path.join(xdg, f"discord-ipc-{i}") for i in range(3)]
+            candidates.append(
+                os.path.join(xdg, "app/com.discordapp.Discord/discord-ipc-0")
+            )
         candidates += [
-            f"/run/user/{uid}/discord-ipc-{i}" for i in range(3)
-        ] + [f"/run/user/{uid}/app/com.discordapp.Discord/discord-ipc-0"]
+            f"/run/user/{uid}/discord-ipc-{i}" for i in range(3),
+            f"/run/user/{uid}/app/com.discordapp.Discord/discord-ipc-0"
+        ]
         for p in candidates:
             if os.path.exists(p):
                 return p
